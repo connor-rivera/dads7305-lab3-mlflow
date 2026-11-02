@@ -1,4 +1,5 @@
 """Train a baseline random forest and track it with MLflow."""
+import argparse
 import mlflow
 import mlflow.pyfunc
 from mlflow.models import infer_signature
@@ -19,7 +20,7 @@ class ProbabilityModel(mlflow.pyfunc.PythonModel):
     def predict(self, context, model_input):
         return self.model.predict_proba(model_input)[:, 1]
 
-def main():
+def main(n_trees):
     mlflow.set_tracking_uri(TRACKING_URI)
     mlflow.set_experiment(EXPERIMENT_NAME)
 
@@ -28,15 +29,16 @@ def main():
 
     with mlflow.start_run(run_name="baseline_random_forest") as run:
         forest = RandomForestClassifier(
-            n_estimators=N_TREES, random_state=RANDOM_STATE
+            n_estimators=n_trees, random_state=RANDOM_STATE
         )
         forest.fit(X_train, y_train)
 
         val_scores = forest.predict_proba(X_val)[:, 1]
         val_auc = roc_auc_score(y_val, val_scores)
+        mlflow.set_tag("status", "candidate")
 
         mlflow.log_param("model_type", "random_forest")
-        mlflow.log_param("n_estimators", N_TREES)
+        mlflow.log_param("n_estimators", n_trees)
         mlflow.log_metric("val_auc", val_auc)
 
         signature = infer_signature(X_train, val_scores)
@@ -52,4 +54,7 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--n-trees", type=int, default=N_TREES)
+    args = parser.parse_args()
+    main(args.n_trees)
